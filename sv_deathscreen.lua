@@ -5,56 +5,48 @@ local CONFIG = {
 }
 
 -- Register Network Strings
-local netStrings = {
-    "deathscreen_sendDeath",
-    "deathscreen_removeDeath",
-    "deathscreen_requestRespawn",
-}
-
-for _, netName in ipairs(netStrings) do
+for _, netName in ipairs({ "deathscreen_sendDeath", "deathscreen_removeDeath", "deathscreen_requestRespawn" }) do
     util.AddNetworkString(netName)
 end
 
 -- Prevent Default Respawn
 hook.Add("PlayerDeathThink", "DeathScreen_BlockDefaultRespawn", function(ply)
-    return false
+    return false -- Prevents default respawn behavior
 end)
 
 -- Notify Client on Death
 hook.Add("PlayerDeath", "DeathScreen_HandleDeath", function(victim)
-    if not IsValid(victim) or not victim:IsPlayer() then return end
-
-    net.Start("deathscreen_sendDeath")
-    net.Send(victim)
+    if IsValid(victim) and victim:IsPlayer() then
+        net.Start("deathscreen_sendDeath")
+        net.Send(victim)
+    end
 end)
 
 -- Remove Death Screen on Respawn
 hook.Add("PlayerSpawn", "DeathScreen_HandleSpawn", function(ply)
-    if not IsValid(ply) then return end
-
-    net.Start("deathscreen_removeDeath")
-    net.Send(ply)
+    if IsValid(ply) then
+        net.Start("deathscreen_removeDeath")
+        net.Send(ply)
+    end
 end)
 
 -- Disable Default Death Sound
 if CONFIG.disableDeathSound then
     hook.Add("PlayerDeathSound", "DeathScreen_DisableDeathSound", function()
-        return true
+        return true -- Prevents death sound
     end)
 end
 
--- Handle Respawn Requests
+-- Check if Player Can Respawn
 local function CanPlayerRespawn(ply)
+    if not IsValid(ply) or ply:Alive() then return false end -- Ensure the player is valid and dead
     if ply:IsSuperAdmin() then return true end
-    if not ply:Alive() then return true end -- Player must be dead
-    for _, role in ipairs(CONFIG.respawnRoles) do
-        if ply:IsUserGroup(role) then
-            return true
-        end
-    end
-    return false
+
+    -- Check if player has permission based on user group
+    return table.HasValue(CONFIG.respawnRoles, ply:GetUserGroup())
 end
 
+-- Handle Respawn Requests
 net.Receive("deathscreen_requestRespawn", function(_, ply)
     if CanPlayerRespawn(ply) then
         ply:Spawn()
