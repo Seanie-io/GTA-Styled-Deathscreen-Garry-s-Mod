@@ -6,7 +6,7 @@ local CONFIG = {
     wastedText = "WASTED",
     respawnText = "Press [SPACE] to respawn",
     countdownText = "Respawn in %d seconds",
-    fadeSpeed = 1.5, -- Speed of fade transitions
+    fadeSpeed = 300, -- Speed of fade transitions (adjusted for FrameTime)
     fieldOfViewModifier = 0.85, -- FOV effect on death
 }
 
@@ -14,12 +14,13 @@ local CONFIG = {
 surface.CreateFont(CONFIG.fontSmall, { font = "Roboto", size = 24, weight = 1000 })
 surface.CreateFont(CONFIG.fontLarge, { font = "Roboto", size = 90, weight = 1000 })
 
--- Local Variables
+-- Local State
 local state = {
     isDead = false,
     deathTime = 0,
     respawnAllowed = false,
-    alpha = 0, -- For fade-in and fade-out effects
+    alpha = 0,
+    hasPressedRespawn = false, -- Prevents spam respawning
 }
 
 -- Helper Functions
@@ -31,10 +32,11 @@ local function SetDeathState(isDead)
     state.isDead = isDead
     state.deathTime = isDead and CurTime() or 0
     state.respawnAllowed = false
-    state.alpha = isDead and 0 or state.alpha -- Reset alpha when state changes
+    state.alpha = isDead and 0 or state.alpha
+    state.hasPressedRespawn = false -- Reset respawn flag on death state change
 end
 
--- Server Communication Handlers
+-- Network Messages Handling
 net.Receive("deathscreen_sendDeath", function()
     SetDeathState(true)
 end)
@@ -67,32 +69,33 @@ end)
 hook.Add("HUDPaint", "DeathScreenHUD", function()
     if not state.isDead then return end
 
+    -- Smooth fade-in using FrameTime()
+    state.alpha = math.Approach(state.alpha, 255, CONFIG.fadeSpeed * FrameTime())
     local alpha = math.Clamp(state.alpha, 0, 255)
-    state.alpha = math.Approach(state.alpha, 255, CONFIG.fadeSpeed) -- Smooth fade-in
 
-    -- Draw WASTED text
+    -- Draw "WASTED" text
     draw.SimpleText(CONFIG.wastedText, CONFIG.fontLarge, ScrW() / 2, ScrH() / 2, Color(255, 0, 0, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
     -- Respawn Countdown
-    local respawnTime = math.Clamp(CONFIG.respawnCooldown - GetDeathDuration(), 0, CONFIG.respawnCooldown)
-    local respawnText = respawnTime > 0
-        and string.format(CONFIG.countdownText, math.ceil(respawnTime))
-        or CONFIG.respawnText
+    local remainingTime = math.Clamp(CONFIG.respawnCooldown - GetDeathDuration(), 0, CONFIG.respawnCooldown)
+    local respawnText = remainingTime > 0 and string.format(CONFIG.countdownText, math.ceil(remainingTime)) or CONFIG.respawnText
 
     draw.SimpleText(respawnText, CONFIG.fontSmall, ScrW() / 2, ScrH() / 2 + 100, Color(255, 255, 255, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
     -- Enable respawn after countdown
-    if respawnTime <= 0 then
+    if remainingTime <= 0 then
         state.respawnAllowed = true
     end
 end)
 
 -- Respawn Logic
 hook.Add("Think", "DeathScreenRespawnHandler", function()
-    if state.isDead and state.respawnAllowed and input.IsKeyDown(KEY_SPACE) then
+    if state.isDead and state.respawnAllowed and not state.hasPressedRespawn and input.IsKeyDown(KEY_SPACE) then
         net.Start("deathscreen_requestRespawn")
         net.SendToServer()
-        state.respawnAllowed = false -- Prevent spamming respawn
+        state.hasPressedRespawn = true -- Prevent multiple sends
+    elseif not input.IsKeyDown(KEY_SPACE) then
+        state.hasPressedRespawn = false -- Reset when key is released
     end
 end)
 
