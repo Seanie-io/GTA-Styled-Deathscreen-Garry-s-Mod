@@ -106,3 +106,37 @@ net.Receive("deathscreen_requestRespawn", function(_, ply)
         ply:ChatPrint("🛑 AI Analysis: Respawn Denied. Tactical Delay Active.")
     end
 end)
+
+-- AI Memory to Prevent Repeated Messages
+local lastMessageTime = {}
+
+local function AIShouldRespawn(ply)
+    local steamID = ply:SteamID()
+    if not playerStats[steamID] then return false end
+
+    local stats = playerStats[steamID]
+    local timeSinceLastDeath = CurTime() - stats.lastDeathTime
+    local timeSinceLastRespawn = CurTime() - stats.lastRespawnTime
+
+    local baseCooldown = 5 -- Base respawn cooldown
+    local aiDecision, respawnAllowed
+
+    -- AI Logic for Respawn
+    if timeSinceLastRespawn < 3 then
+        aiDecision = "Rate-Limit Active: Preventing rapid respawns."
+        respawnAllowed = false
+    else
+        aiDecision = "Respawn Allowed."
+        respawnAllowed = true
+    end
+
+    -- Ensure we only send the message ONCE
+    lastMessageTime[steamID] = lastMessageTime[steamID] or 0
+    if CurTime() - lastMessageTime[steamID] > 1 then
+        ply:ChatPrint("🚀 AI Decision: " .. aiDecision)
+        lastMessageTime[steamID] = CurTime()
+    end
+
+    return respawnAllowed
+end
+
