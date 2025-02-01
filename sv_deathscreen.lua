@@ -1,142 +1,112 @@
--- 🚀 CONFIGURATION (Optimized for AI-Driven Decision Making)
+-- CONFIGURATION
 local CONFIG = {
-    respawnRoles = { "superadmin", "admin" }, -- Traditional role-based respawn (but AI will override)
-    disableDeathSound = true, -- Optimized to remove unnecessary distractions
-    enableAIRespawn = true, -- AI-driven respawn decision making
-    neuralLearning = true, -- AI will adjust over time using memory
-    aiAggressivenessFactor = 1.3 -- Determines how quickly AI allows respawn
+    respawnRoles = { "superadmin", "admin" }, -- User roles allowed immediate respawns
+    disableDeathSound = true, -- Disable annoying death sound
+    baseRespawnCooldown = 5, -- Cooldown before respawn is allowed
 }
 
--- 🚀 REGISTER NETWORK STRINGS
-for _, netName in ipairs({ "deathscreen_sendDeath", "deathscreen_removeDeath", "deathscreen_requestRespawn" }) do
-    util.AddNetworkString(netName)
+-- Register network strings
+util.AddNetworkString("deathscreen_sendDeath")
+util.AddNetworkString("deathscreen_removeDeath")
+util.AddNetworkString("deathscreen_requestRespawn")
+
+-- PLAYER STATE TRACKER
+-- Elon Musk would use a scalable table for tracking player states efficiently.
+local playerStates = {}
+
+-- Initialize player state
+local function InitializePlayerState(ply)
+    playerStates[ply:SteamID()] = {
+        isDead = false,
+        deathTime = 0,
+        canRespawn = false,
+    }
 end
 
--- 🚀 PREVENT DEFAULT RESPAWN (AI will control it)
-hook.Add("PlayerDeathThink", "DeathScreen_BlockDefaultRespawn", function(ply)
-    return false -- AI takes over default behavior
+-- Cleanup player state when disconnected
+hook.Add("PlayerDisconnected", "DeathScreen_CleanupState", function(ply)
+    playerStates[ply:SteamID()] = nil
 end)
 
--- 🚀 AI-DRIVEN PLAYER TRACKING SYSTEM (Neural Network Memory)
-local playerStats = {}
+-- Respawn permission logic
+local function CanPlayerRespawn(ply)
+    local steamID = ply:SteamID()
+    local state = playerStates[steamID]
+    
+    -- Basic validation
+    if not state or not IsValid(ply) or ply:Alive() then return false end
 
--- 🚀 UPDATE PLAYER STATS ON DEATH
-hook.Add("PlayerDeath", "DeathScreen_HandleDeath", function(victim, inflictor, attacker)
+    -- Superadmin or admin bypass
+    if ply:IsSuperAdmin() or table.HasValue(CONFIG.respawnRoles, ply:GetUserGroup()) then
+        return true
+    end
+
+    -- Check respawn cooldown
+    local timeSinceDeath = CurTime() - state.deathTime
+    return timeSinceDeath >= CONFIG.baseRespawnCooldown
+end
+
+-- Block default respawn behavior
+hook.Add("PlayerDeathThink", "DeathScreen_BlockDefaultRespawn", function(ply)
+    return false -- Prevent default respawn handling
+end)
+
+-- Handle player death
+hook.Add("PlayerDeath", "DeathScreen_HandleDeath", function(victim)
     if not IsValid(victim) or not victim:IsPlayer() then return end
 
     local steamID = victim:SteamID()
-    playerStats[steamID] = playerStats[steamID] or { deaths = 0, lastDeathTime = CurTime(), lastRespawnTime = 0 }
-    playerStats[steamID].deaths = playerStats[steamID].deaths + 1
-    playerStats[steamID].lastDeathTime = CurTime()
+    playerStates[steamID] = playerStates[steamID] or {}
+    local state = playerStates[steamID]
 
+    -- Update state on death
+    state.isDead = true
+    state.deathTime = CurTime()
+    state.canRespawn = false
+
+    -- Notify the client
     net.Start("deathscreen_sendDeath")
     net.Send(victim)
 end)
 
--- 🚀 REMOVE DEATH SCREEN ON RESPAWN
+-- Handle player respawn requests
+net.Receive("deathscreen_requestRespawn", function(_, ply)
+    if CanPlayerRespawn(ply) then
+        ply:Spawn() -- Respawn the player
+        local steamID = ply:SteamID()
+        playerStates[steamID].canRespawn = false -- Reset state after respawn
+
+        -- Notify the client to remove the death screen
+        net.Start("deathscreen_removeDeath")
+        net.Send(ply)
+    else
+        ply:ChatPrint("⛔ You cannot respawn yet. Please wait.")
+    end
+end)
+
+-- Handle player spawn
 hook.Add("PlayerSpawn", "DeathScreen_HandleSpawn", function(ply)
-    if not IsValid(ply) then return end
-
     local steamID = ply:SteamID()
-    playerStats[steamID] = playerStats[steamID] or { deaths = 0, lastDeathTime = 0, lastRespawnTime = 0 }
-    playerStats[steamID].lastRespawnTime = CurTime()
+    playerStates[steamID] = playerStates[steamID] or {}
 
+    -- Reset player state on spawn
+    local state = playerStates[steamID]
+    state.isDead = false
+    state.canRespawn = false
+
+    -- Notify client to remove death effects
     net.Start("deathscreen_removeDeath")
     net.Send(ply)
 end)
 
--- 🚀 DISABLE DEFAULT DEATH SOUND
+-- Disable default death sound
 if CONFIG.disableDeathSound then
     hook.Add("PlayerDeathSound", "DeathScreen_DisableDeathSound", function()
-        return true
+        return true -- Block the sound
     end)
 end
 
--- 🚀 AI-POWERED DECISION MAKING: Should the player respawn?
-local function AIShouldRespawn(ply)
-    if not CONFIG.enableAIRespawn then return false end
-
-    local steamID = ply:SteamID()
-    if not playerStats[steamID] then return false end
-
-    local stats = playerStats[steamID]
-    local timeSinceLastDeath = CurTime() - stats.lastDeathTime
-    local timeSinceLastRespawn = CurTime() - stats.lastRespawnTime
-
-    -- AI-DRIVEN FACTORS:
-    local kdr = (ply:Frags() + 1) / math.max(1, stats.deaths) -- Avoid division by zero
-    local baseCooldown = 5 -- Base respawn time
-    local aiDecision, respawnAllowed
-
-    -- 🚀 AI PREDICTIVE MODEL:
-    if kdr > 2.0 then
-        baseCooldown = 2 -- Faster respawn for skilled players
-        aiDecision = "Priority: Fast Respawn for High Performance."
-        respawnAllowed = true
-    elseif stats.deaths > 10 then
-        baseCooldown = 10 -- Penalize high deaths
-        aiDecision = "Balancing Gameplay: Extended Respawn Delay."
-        respawnAllowed = false
-    elseif timeSinceLastRespawn < 3 then
-        baseCooldown = 7 -- Prevent rapid respawning
-        aiDecision = "Rate-Limit Active: Preventing rapid respawns."
-        respawnAllowed = false
-    elseif ply:IsSuperAdmin() then
-        aiDecision = "Superadmin Override: Immediate Respawn."
-        respawnAllowed = true
-    elseif table.HasValue(CONFIG.respawnRoles, ply:GetUserGroup()) then
-        aiDecision = "Admin Role Detected: Respawn Allowed."
-        respawnAllowed = true
-    else
-        aiDecision = "Standard Respawn Protocol Applied."
-        respawnAllowed = timeSinceLastDeath >= baseCooldown
-    end
-
-    --  AI Optimized Feedback:
-    ply:ChatPrint("🚀 AI Decision: " .. aiDecision)
-    
-    return respawnAllowed
+-- Debugging and Logging
+if IsValid(game.GetWorld()) then -- Only run on servers
+    print("[DeathScreen] Initialized. Elon-approved logic is running.")
 end
-
--- 🚀 HANDLE RESPAWN REQUESTS (Now AI-Controlled)
-net.Receive("deathscreen_requestRespawn", function(_, ply)
-    if AIShouldRespawn(ply) then
-        ply:Spawn()
-    else
-        ply:ChatPrint("🛑 AI Analysis: Respawn Denied. Tactical Delay Active.")
-    end
-end)
-
--- AI Memory to Prevent Repeated Messages
-local lastMessageTime = {}
-
-local function AIShouldRespawn(ply)
-    local steamID = ply:SteamID()
-    if not playerStats[steamID] then return false end
-
-    local stats = playerStats[steamID]
-    local timeSinceLastDeath = CurTime() - stats.lastDeathTime
-    local timeSinceLastRespawn = CurTime() - stats.lastRespawnTime
-
-    local baseCooldown = 5 -- Base respawn cooldown
-    local aiDecision, respawnAllowed
-
-    -- AI Logic for Respawn
-    if timeSinceLastRespawn < 3 then
-        aiDecision = "Rate-Limit Active: Preventing rapid respawns."
-        respawnAllowed = false
-    else
-        aiDecision = "Respawn Allowed."
-        respawnAllowed = true
-    end
-
-    -- Ensure we only send the message ONCE
-    lastMessageTime[steamID] = lastMessageTime[steamID] or 0
-    if CurTime() - lastMessageTime[steamID] > 1 then
-        ply:ChatPrint("🚀 AI Decision: " .. aiDecision)
-        lastMessageTime[steamID] = CurTime()
-    end
-
-    return respawnAllowed
-end
-
