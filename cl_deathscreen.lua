@@ -1,4 +1,4 @@
--- CONFIGURATION (Musk-Level Optimization)
+-- CONFIGURATION (-Level Optimization)
 local CONFIG = {
     fontSmall = "deathscreen_small",
     fontLarge = "deathscreen_large",
@@ -7,7 +7,7 @@ local CONFIG = {
     fieldOfViewModifier = 0.85,
     enableAI = true, -- AI-driven decision-making enabled
     enableNeuralLearning = true, -- Neural network-inspired self-learning
-    aiAggressivenessFactor = 1.5, -- Elon would optimize this dynamically
+    aiAggressivenessFactor = 1.5, -- 
     enableAIAdvisory = true -- AI will provide coaching and tactical feedback
 }
 
@@ -38,7 +38,7 @@ local playerStats = {
     averageLifeSpan = 0
 }
 
--- 🔥 ELON-STYLE AI: Advanced Decision-Making Algorithm
+-- 🔥  AI: Advanced Decision-Making Algorithm
 local function AIAnalyzeRespawn()
     if not CONFIG.enableAI then return CONFIG.baseRespawnCooldown end
 
@@ -124,7 +124,7 @@ hook.Add("HUDPaint", "DeathScreenHUD", function()
     end
 end)
 
--- 🚀 ELON-STYLE AUTONOMOUS RESPAWN LOGIC
+-- 🚀  AUTONOMOUS RESPAWN LOGIC
 hook.Add("Think", "DeathScreenRespawnHandler", function()
     if state.isDead and state.canRespawn and input.IsKeyDown(KEY_SPACE) then
         net.Start("deathscreen_requestRespawn")
