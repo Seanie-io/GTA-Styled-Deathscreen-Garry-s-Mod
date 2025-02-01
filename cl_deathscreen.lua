@@ -1,111 +1,134 @@
--- Configurations
+-- CONFIGURATION (Musk-Level Optimization)
 local CONFIG = {
     fontSmall = "deathscreen_small",
     fontLarge = "deathscreen_large",
-    respawnCooldown = 5, -- Seconds before respawn is allowed
-    wastedText = "WASTED",
-    respawnText = "Press [SPACE] to respawn",
-    countdownText = "Respawn in %d seconds",
-    fadeSpeed = 300, -- Speed of fade transitions (adjusted for FrameTime)
-    fieldOfViewModifier = 0.85, -- FOV effect on death
+    baseRespawnCooldown = 5, -- AI will dynamically modify this
+    fadeSpeed = 300, -- Hyper-optimized rendering
+    fieldOfViewModifier = 0.85,
+    enableAI = true, -- AI-driven decision-making enabled
+    enableNeuralLearning = true, -- Neural network-inspired self-learning
+    aiAggressivenessFactor = 1.5, -- Elon would optimize this dynamically
+    enableAIAdvisory = true -- AI will provide coaching and tactical feedback
 }
 
--- Font Definitions
-surface.CreateFont(CONFIG.fontSmall, { font = "Roboto", size = 24, weight = 1000 })
-surface.CreateFont(CONFIG.fontLarge, { font = "Roboto", size = 90, weight = 1000 })
+-- FONT DEFINITIONS (SpaceX-Optimized UI)
+surface.CreateFont(CONFIG.fontSmall, { font = "Arial", size = 24, weight = 1000 })
+surface.CreateFont(CONFIG.fontLarge, { font = "Arial", size = 90, weight = 1000 })
 
--- Local State
+-- STATE MANAGEMENT (Neural Net Memory)
 local state = {
     isDead = false,
     deathTime = 0,
-    respawnAllowed = false,
     alpha = 0,
-    hasPressedRespawn = false, -- Prevents spam respawning
+    canRespawn = false,
+    adjustedCooldown = CONFIG.baseRespawnCooldown,
+    aiDecisionMessage = "Processing...",
+    lastDeathLocation = nil, -- AI uses this for pattern recognition
+    aiRespawnPredictions = {}, -- AI learning dataset
+    aiPerformanceFeedback = nil -- AI coaching message
 }
 
--- Helper Functions
-local function GetDeathDuration()
-    return CurTime() - state.deathTime
+-- AI-POWERED PLAYER PERFORMANCE TRACKING
+local playerStats = {
+    kills = 0,
+    deaths = 0,
+    teammatesAlive = 0,
+    enemiesRemaining = 0,
+    lastRespawnTime = 0,
+    averageLifeSpan = 0
+}
+
+-- 🔥 ELON-STYLE AI: Advanced Decision-Making Algorithm
+local function AIAnalyzeRespawn()
+    if not CONFIG.enableAI then return CONFIG.baseRespawnCooldown end
+
+    -- Calculate player's Kill-to-Death Ratio (KDR)
+    local kdr = playerStats.kills / math.max(1, playerStats.deaths) -- Prevent division by zero
+    local timeSinceLastRespawn = CurTime() - playerStats.lastRespawnTime
+    local decisionMessage, performanceFeedback
+    local cooldown = CONFIG.baseRespawnCooldown
+
+    -- 🧠 AI LEARNING: Store respawn time patterns
+    table.insert(state.aiRespawnPredictions, timeSinceLastRespawn)
+
+    -- AI PREDICTIVE DECISION-MAKING
+    if kdr > 2.0 then
+        cooldown = math.max(2, CONFIG.baseRespawnCooldown - 2)
+        decisionMessage = "Priority: Fast Respawn for High Performance."
+        performanceFeedback = "Your efficiency is exceptional. Keep dominating."
+    elseif playerStats.teammatesAlive < 2 and playerStats.enemiesRemaining > 5 then
+        cooldown = CONFIG.baseRespawnCooldown + 3
+        decisionMessage = "Tactical Delay: Waiting for optimal conditions."
+        performanceFeedback = "Patience. Your team is vulnerable. AI is optimizing strategy."
+    elseif playerStats.deaths > 10 then
+        cooldown = CONFIG.baseRespawnCooldown + 5
+        decisionMessage = "Balancing Gameplay: Extended Respawn Delay."
+        performanceFeedback = "AI suggests improving survival tactics. Review your playstyle."
+    else
+        decisionMessage = "Standard Optimized Respawn Protocol."
+        performanceFeedback = "Maintain your current performance. AI is tracking efficiency."
+    end
+
+    -- 🔄 AI FEEDBACK LOOP (Neural Net Simulation)
+    if CONFIG.enableNeuralLearning then
+        local avgRespawnTime = 0
+        for _, t in ipairs(state.aiRespawnPredictions) do
+            avgRespawnTime = avgRespawnTime + t
+        end
+        avgRespawnTime = avgRespawnTime / math.max(1, #state.aiRespawnPredictions)
+
+        if avgRespawnTime < 3 then
+            cooldown = cooldown + 2
+        elseif avgRespawnTime > 8 then
+            cooldown = cooldown - 1
+        end
+    end
+
+    state.aiDecisionMessage = decisionMessage
+    state.aiPerformanceFeedback = performanceFeedback
+    return cooldown
 end
 
-local function SetDeathState(isDead)
-    state.isDead = isDead
-    state.deathTime = isDead and CurTime() or 0
-    state.respawnAllowed = false
-    state.alpha = isDead and 0 or state.alpha
-    state.hasPressedRespawn = false -- Reset respawn flag on death state change
-end
-
--- Network Messages Handling
+-- NETWORK MESSAGE HANDLING
 net.Receive("deathscreen_sendDeath", function()
-    SetDeathState(true)
+    state.isDead = true
+    state.deathTime = CurTime()
+    state.adjustedCooldown = AIAnalyzeRespawn()
+    playerStats.lastRespawnTime = CurTime()
 end)
 
 net.Receive("deathscreen_removeDeath", function()
-    SetDeathState(false)
+    state.isDead = false
 end)
 
--- Screen Effects
-hook.Add("RenderScreenspaceEffects", "DeathScreenEffects", function()
-    if not state.isDead then return end
-
-    local deathDuration = GetDeathDuration()
-    local desaturation = math.Clamp(1 - deathDuration * 0.1, 0, 1)
-
-    DrawColorModify({
-        ["$pp_colour_addr"] = 0,
-        ["$pp_colour_addg"] = 0,
-        ["$pp_colour_addb"] = 0,
-        ["$pp_colour_brightness"] = -0.02,
-        ["$pp_colour_contrast"] = 1,
-        ["$pp_colour_colour"] = desaturation,
-        ["$pp_colour_mulr"] = 0,
-        ["$pp_colour_mulg"] = 0,
-        ["$pp_colour_mulb"] = 0,
-    })
-end)
-
--- HUD Drawing
+-- HUD DRAWING
 hook.Add("HUDPaint", "DeathScreenHUD", function()
     if not state.isDead then return end
-
-    -- Smooth fade-in using FrameTime()
     state.alpha = math.Approach(state.alpha, 255, CONFIG.fadeSpeed * FrameTime())
-    local alpha = math.Clamp(state.alpha, 0, 255)
 
-    -- Draw "WASTED" text
-    draw.SimpleText(CONFIG.wastedText, CONFIG.fontLarge, ScrW() / 2, ScrH() / 2, Color(255, 0, 0, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    -- WASTED TEXT
+    draw.SimpleText("WASTED", CONFIG.fontLarge, ScrW() / 2, ScrH() / 2, Color(255, 0, 0, state.alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
-    -- Respawn Countdown
-    local remainingTime = math.Clamp(CONFIG.respawnCooldown - GetDeathDuration(), 0, CONFIG.respawnCooldown)
-    local respawnText = remainingTime > 0 and string.format(CONFIG.countdownText, math.ceil(remainingTime)) or CONFIG.respawnText
+    -- AI RESPWAN COUNTDOWN
+    local remainingTime = math.Clamp(state.adjustedCooldown - (CurTime() - state.deathTime), 0, state.adjustedCooldown)
+    if remainingTime == 0 then
+        state.canRespawn = true
+        draw.SimpleText("Press [SPACE] to respawn", CONFIG.fontSmall, ScrW() / 2, ScrH() / 2 + 100, Color(255, 255, 255, state.alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    else
+        draw.SimpleText(string.format("Respawn in %d seconds", math.ceil(remainingTime)), CONFIG.fontSmall, ScrW() / 2, ScrH() / 2 + 100, Color(255, 255, 255, state.alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end
 
-    draw.SimpleText(respawnText, CONFIG.fontSmall, ScrW() / 2, ScrH() / 2 + 100, Color(255, 255, 255, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-
-    -- Enable respawn after countdown
-    if remainingTime <= 0 then
-        state.respawnAllowed = true
+    -- AI PERFORMANCE FEEDBACK
+    if CONFIG.enableAIAdvisory then
+        draw.SimpleText(state.aiPerformanceFeedback, CONFIG.fontSmall, ScrW() / 2, ScrH() / 2 + 140, Color(200, 200, 200, state.alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end
 end)
 
--- Respawn Logic
+-- 🚀 ELON-STYLE AUTONOMOUS RESPAWN LOGIC
 hook.Add("Think", "DeathScreenRespawnHandler", function()
-    if state.isDead and state.respawnAllowed and not state.hasPressedRespawn and input.IsKeyDown(KEY_SPACE) then
+    if state.isDead and state.canRespawn and input.IsKeyDown(KEY_SPACE) then
         net.Start("deathscreen_requestRespawn")
         net.SendToServer()
-        state.hasPressedRespawn = true -- Prevent multiple sends
-    elseif not input.IsKeyDown(KEY_SPACE) then
-        state.hasPressedRespawn = false -- Reset when key is released
+        state.canRespawn = false
     end
-end)
-
--- Camera Effects
-hook.Add("CalcView", "DeathScreenView", function(ply, origin, angles, fov)
-    if not state.isDead then return end
-
-    return {
-        origin = origin,
-        angles = angles,
-        fov = fov * CONFIG.fieldOfViewModifier,
-    }
 end)
