@@ -1,4 +1,4 @@
--- Configurations
+-- Configurationso
 local CONFIG = {
     fontSmall = "deathscreen_small",
     fontLarge = "deathscreen_large",
